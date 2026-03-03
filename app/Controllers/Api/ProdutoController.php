@@ -3,6 +3,11 @@
 namespace App\Controllers\Api;
 
 use CodeIgniter\RESTful\ResourceController;
+use App\Models\ProdutoModel;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Writer\Xls;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class ProdutoController extends ResourceController
 {
@@ -103,12 +108,12 @@ class ProdutoController extends ResourceController
     {
         // 1. Recebe os dados (getVar funciona para JSON ou POST)
         $novaQuantidade = $this->request->getVar('quantidade');
-      
+
         // 2. Validação básica
         if (empty($id) || $novaQuantidade === null) {
             return $this->failValidationErrors('ID ou quantidade não fornecidos.');
         }
- 
+
         $dados = [
             'estoque_atual' => $novaQuantidade
         ];
@@ -123,5 +128,84 @@ class ProdutoController extends ResourceController
         }
 
         return $this->fail('Falha ao atualizar o estoque no banco de dados.');
+    }
+    public function export($formato = 'xlsx')
+    {
+        $produtoModel = new ProdutoModel();
+        $produtos = $produtoModel->findAll();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        // Cabeçalhos
+        $sheet->setCellValue('A1', 'ID');
+        $sheet->setCellValue('B1', 'Nome');
+        $sheet->setCellValue('C1', 'Preço');
+        $sheet->setCellValue('D1', 'Quantidade');
+        $sheet->setCellValue('E1', 'Data Criação');
+
+        // Dados
+        $linha = 2;
+        foreach ($produtos as $produto) {
+            $sheet->setCellValue('A' . $linha, $produto['id']);
+            $sheet->setCellValue('B' . $linha, $produto['nome']);
+            $sheet->setCellValue('C' . $linha, $produto['preco']);
+            $sheet->setCellValue('D' . $linha, $produto['quantidade']);
+            $sheet->setCellValue('E' . $linha, $produto['created_at']);
+            $linha++;
+        }
+
+        $fileName = 'produtos_' . date('Y-m-d');
+
+        // Escolher formato
+        if ($formato == 'xls') {
+            $writer = new Xls($spreadsheet);
+            $fileName .= '.xls';
+            $this->response->setHeader('Content-Type', 'application/vnd.ms-excel');
+        } else {
+            $writer = new Xlsx($spreadsheet);
+            $fileName .= '.xlsx';
+            $this->response->setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        }
+
+        $this->response->setHeader('Content-Disposition', 'attachment; filename="' . $fileName . '"');
+        $this->response->setHeader('Cache-Control', 'max-age=0');
+
+        $writer->save('php://output');
+        exit;
+    }
+    public function import()
+    {
+        $file = $this->request->getFile('file');
+
+        if (!$file->isValid()) {
+            return $this->response->setJSON([
+                'status' => false,
+                'message' => 'Arquivo inválido'
+            ]);
+        }
+
+        $spreadsheet = IOFactory::load($file->getTempName());
+        $sheet = $spreadsheet->getActiveSheet();
+        $rows = $sheet->toArray();
+
+        $produtoModel = new ProdutoModel();
+
+        // Ignorar primeira linha (cabeçalho)
+        unset($rows[0]);
+
+        foreach ($rows as $row) {
+            $produtoModel->insert([
+                'nome'       => $row[1],
+                'preco'      => $row[2],
+                'quantidade' => $row[3],
+                'created_at' => date('Y-m-d H:i:s')
+            ]);
+        }
+
+        return $this->response->setJSON([
+            'status' => true,
+            'message' => 'Produtos importados com sucesso!'
+        ]);
     }
 }

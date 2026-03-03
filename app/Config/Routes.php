@@ -13,7 +13,7 @@ $routes->post('users/reset-password', 'UserController::resetPassword');
 $routes->post('api/refresh', 'Api\UserController::refresh');
 
 // Grupo Protegido por JWT
-$routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'jwt'], function ($routes) {
+$routes->group('api', ['namespace' => 'App\Controllers\Api', /*'filter' => 'jwt'*/], function ($routes) {
 
             // Rotas de Utilizadores (Específicas primeiro para evitar conflitos com (:num))
             $routes->get('users/pesquisarPorNome', 'UserController::pesquisarPorNome');
@@ -37,6 +37,8 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'jwt'],
             $routes->get('produtos/baixoEstoque', 'ProdutoController::baixoEstoque');
             $routes->post('produtos/alterarEstoque/(:num)', 'ProdutoController::alterarEstoque/$1');
             $routes->resource('produtos', ['controller' => 'ProdutoController']);
+            $routes->get('produtos/export/(:segment)', 'ProdutoController::export/$1');
+            $routes->post('produtos/import', 'ProdutoController::import');
             // crud categorias
             $routes->resource('categorias', ['controller' => 'CategoriaController']);
             // crud subcategorias
